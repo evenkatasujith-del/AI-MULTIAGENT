@@ -2,68 +2,212 @@ def make_final_decision(
     verification,
     risk,
     correction,
-    re_verification
+    re_verification=None,
+    independent_verification=None
 ):
 
-    # Contradiction takes priority over normal verification
-    if "Potential contradiction" in risk["risks"]:
+    primary_status = verification.get("status", "UNSUPPORTED")
+    primary_confidence = float(
+        verification.get("confidence", 0.0)
+    )
+
+    independent_status = "NOT_VERIFIED"
+
+    independent_confidence = 0.0
+
+    if independent_verification:
+        independent_status = independent_verification.get(
+            "status",
+            "NOT_VERIFIED"
+        )
+
+        independent_confidence = float(
+            independent_verification.get(
+                "confidence",
+                0.0
+            )
+        )
+
+    risk_detected = risk.get(
+        "risk_detected",
+        False
+    )
+
+    correction_action = correction.get(
+        "action",
+        "REJECT"
+    )
+
+    # -----------------------------------------
+    # 1. REJECTED CLAIM
+    # -----------------------------------------
+
+    if correction_action == "REJECT":
 
         return {
             "status": "NOT_VERIFIED",
-            "confidence": verification["confidence"],
+            "confidence": primary_confidence,
             "reason": (
-                "The retrieved evidence appears to contradict the claim."
+                "The claim was rejected because "
+                "there was insufficient supporting evidence."
             )
         }
 
-    # Fully supported claim
-    if verification["status"] == "SUPPORTED" and not risk["risk_detected"]:
+    # -----------------------------------------
+    # 2. RE-VERIFICATION
+    # -----------------------------------------
 
-        return {
-            "status": "VERIFIED",
-            "confidence": verification["confidence"],
-            "reason": (
-                "The claim is supported by the retrieved evidence."
+    if re_verification:
+
+        re_status = re_verification.get(
+            "status",
+            "NOT_VERIFIED"
+        )
+
+        re_confidence = float(
+            re_verification.get(
+                "confidence",
+                0.0
             )
-        }
+        )
 
-    # Re-verification after a genuine correction
-    if correction["corrected"] and re_verification:
-
-        new_verification = re_verification["verification"]
-
-        if new_verification["status"] == "SUPPORTED":
+        if re_status == "VERIFIED":
 
             return {
                 "status": "VERIFIED_AFTER_CORRECTION",
-                "confidence": new_verification["confidence"],
+                "confidence": re_confidence,
                 "reason": (
-                    "The corrected claim passed re-verification."
+                    "The corrected claim passed "
+                    "re-verification."
                 )
             }
 
+    # -----------------------------------------
+    # 3. HIGH-CONFIDENCE AGREEMENT
+    # -----------------------------------------
+
+    if (
+        primary_status == "VERIFIED"
+        and
+        independent_status == "INDEPENDENTLY_SUPPORTED"
+        and
+        not risk_detected
+    ):
+
+        confidence = round(
+            (primary_confidence +
+             independent_confidence) / 2,
+            2
+        )
+
         return {
-            "status": "NOT_VERIFIED",
-            "confidence": new_verification["confidence"],
+            "status": "VERIFIED",
+            "confidence": confidence,
             "reason": (
-                "The corrected claim could not be sufficiently verified."
+                "The claim was strongly supported "
+                "by primary and independent verification."
             )
         }
 
-    # Partial evidence
-    if verification["status"] == "PARTIALLY_SUPPORTED":
+    # -----------------------------------------
+    # 4. PRIMARY VERIFICATION STRONG
+    # -----------------------------------------
+
+    if (
+        primary_status == "VERIFIED"
+        and
+        primary_confidence >= 0.70
+        and
+        not risk_detected
+    ):
+
+        return {
+            "status": "VERIFIED",
+            "confidence": primary_confidence,
+            "reason": (
+                "The claim received strong primary "
+                "verification and no significant risk "
+                "was detected."
+            )
+        }
+
+    # -----------------------------------------
+    # 5. INDEPENDENT SUPPORT
+    # -----------------------------------------
+
+    if (
+        independent_status == "INDEPENDENTLY_SUPPORTED"
+        and
+        independent_confidence >= 0.65
+        and
+        not risk_detected
+    ):
+
+        return {
+            "status": "VERIFIED",
+            "confidence": independent_confidence,
+            "reason": (
+                "The claim received strong independent "
+                "verification and no significant risk "
+                "was detected."
+            )
+        }
+
+    # -----------------------------------------
+    # 6. PARTIAL VERIFICATION
+    # -----------------------------------------
+
+    if (
+        primary_status == "PARTIALLY_VERIFIED"
+        or
+        independent_status == "INDEPENDENTLY_PARTIAL"
+    ):
+
+        confidence = max(
+            primary_confidence,
+            independent_confidence
+        )
 
         return {
             "status": "PARTIALLY_VERIFIED",
-            "confidence": verification["confidence"],
+            "confidence": confidence,
             "reason": (
-                "The available evidence only partially supports the claim."
+                "The available evidence supports "
+                "important parts of the claim, but "
+                "does not fully verify every detail."
             )
         }
 
-    # Unsupported / other cases
+    # -----------------------------------------
+    # 7. RISK DETECTED
+    # -----------------------------------------
+
+    if risk_detected:
+
+        return {
+            "status": "NOT_VERIFIED",
+            "confidence": min(
+                primary_confidence,
+                independent_confidence
+                if independent_confidence > 0
+                else primary_confidence
+            ),
+            "reason": (
+                "The claim could not be reliably "
+                "verified because verification "
+                "identified one or more risks."
+            )
+        }
+
+    # -----------------------------------------
+    # 8. DEFAULT
+    # -----------------------------------------
+
     return {
         "status": "NOT_VERIFIED",
-        "confidence": verification["confidence"],
-        "reason": verification["reason"]
+        "confidence": primary_confidence,
+        "reason": (
+            "The claim could not be reliably "
+            "verified with the available evidence."
+        )
     }
