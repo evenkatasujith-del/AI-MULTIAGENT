@@ -8,17 +8,35 @@ def correct_claim(claim, risk):
             "reason": "No correction required."
         }
 
-    corrected_claim = claim
-
     if "Unsupported claim" in risk["risks"]:
-        corrected_claim = (
-            "This claim could not be reliably verified because "
-            "sufficient supporting evidence was not found."
-        )
+
+        return {
+            "corrected": True,
+            "original_claim": claim,
+            "corrected_claim": (
+                "This claim is not sufficiently supported by the available evidence."
+            ),
+            "reason": (
+                "The original claim was not sufficiently supported "
+                "by reliable evidence."
+            )
+        }
+
+    if "Insufficient supporting evidence" in risk["risks"]:
+
+        return {
+            "corrected": False,
+            "original_claim": claim,
+            "corrected_claim": claim,
+            "reason": (
+                "The claim is only partially supported by the available evidence, "
+                "so it was not rewritten without stronger evidence."
+            )
+        }
 
     return {
-        "corrected": True,
+        "corrected": False,
         "original_claim": claim,
-        "corrected_claim": corrected_claim,
-        "reason": "The original claim was not sufficiently supported by evidence."
+        "corrected_claim": claim,
+        "reason": "The claim could not be reliably verified."
     }

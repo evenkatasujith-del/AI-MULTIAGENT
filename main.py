@@ -1,12 +1,16 @@
-from reverify import reverify_claim
-from correction import correct_claim
-from risk_detector import detect_risk
-from verifier import verify_claim
-from ai import generate_answer, extract_claims
-from evidence import get_evidence
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
+
+from ai import generate_answer, extract_claims
+from evidence import get_evidence
+from verifier import verify_claim
+from independent_verifier import independent_verify
+from risk_detector import detect_risk
+from correction import correct_claim
+from reverify import reverify_claim
+from decision import make_final_decision
+
 
 app = FastAPI(title="VerifyAI")
 
@@ -49,55 +53,60 @@ def verify(request: QuestionRequest):
 
     question = request.question
 
-    answer = """
-    Artificial intelligence is a field of computer science.
-    AI allows computers to perform tasks that normally require human intelligence.
-    AI is used in areas such as healthcare, transportation, and education.
-    """
+    answer = generate_answer(question)
 
     claims = extract_claims(answer)
 
     verified_claims = []
 
-  for claim in claims:
+    for claim in claims:
+        evidence = get_evidence(claim)
 
-    # 1. Get evidence
-    evidence = get_evidence(claim)
-
-    # 2. Verify original claim
-    verification = verify_claim(
-        claim,
-        evidence
-    )
-
-    # 3. Detect risks
-    risk = detect_risk(
-        claim,
-        verification
-    )
-
-    # 4. Correct if necessary
-    correction = correct_claim(
-        claim,
-        risk
-    )
-
-    # 5. Re-verify corrected claim if correction happened
-    re_verification = None
-
-    if correction["corrected"]:
-        re_verification = reverify_claim(
-            correction["corrected_claim"]
+        verification = verify_claim(
+            claim,
+            evidence
         )
 
-    verified_claims.append({
-        "claim": claim,
-        "evidence": evidence,
-        "verification": verification,
-        "risk": risk,
-        "correction": correction,
-        "re_verification": re_verification
-    })
+        independent_verification = independent_verify(
+            claim,
+            evidence
+        )
+
+        risk = detect_risk(
+            claim,
+            verification,
+            evidence
+        )
+
+        correction = correct_claim(
+            claim,
+            risk
+        )
+
+        re_verification = None
+
+        if correction["corrected"]:
+            re_verification = reverify_claim(
+                correction["corrected_claim"]
+            )
+
+        final_decision = make_final_decision(
+            verification,
+            risk,
+            correction,
+            re_verification
+        )
+
+        verified_claims.append({
+            "claim": claim,
+            "evidence": evidence,
+            "verification": verification,
+            "independent_verification": independent_verification,
+            "risk": risk,
+            "correction": correction,
+            "re_verification": re_verification,
+            "final_decision": final_decision
+        })
 
     return {
         "status": "success",
