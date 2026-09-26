@@ -387,6 +387,31 @@ def smart_verify(request: QuestionRequest):
                     expression,
                     ai_answer
                 )
+        if math_result["verified"]:
+
+            return {
+        "status": "success",
+        "type": "MATH",
+        "question": question,
+        "ai_answer": ai_answer,
+        "expression": expression,
+        "verification": math_result,
+        "final_answer": math_result["calculated"],
+        "corrected": False
+    }
+
+        else:
+
+                return {
+        "status": "success",
+        "type": "MATH",
+        "question": question,
+        "ai_answer": ai_answer,
+        "expression": expression,
+        "verification": math_result,
+        "final_answer": math_result["calculated"],
+        "corrected": True
+    }
 
                 print("Math verification:")
                 print(math_result)
