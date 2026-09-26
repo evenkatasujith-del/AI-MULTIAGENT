@@ -11,6 +11,7 @@ import {
 } from 'lucide-react';
 import ClaimCard from './ClaimCard';
 import StatusBadge from './StatusBadge';
+import MultiAgentMetrics from './MultiAgentMetrics';
 
 export default function FactResult({ data }) {
   if (!data) return null;
@@ -130,11 +131,20 @@ export default function FactResult({ data }) {
         </div>
       </div>
 
+      {/* Dual Multi-Agent Metrics (Confidence, Claims, Latency) */}
+      <MultiAgentMetrics
+        multiAgent={data.multi_agent}
+        totalConfidence={avgConfidence}
+        latency={data.latency}
+      />
+
       {/* AI Answer Card */}
       <div className="ai-answer-card">
         <div className="section-label">
           <Sparkles size={14} color="var(--primary-600)" />
-          Generated AI Answer
+          {data.is_user_response || data.pasted_response
+            ? 'Pasted AI Response (Independently Validated)'
+            : 'Generated AI Answer'}
         </div>
         <div className="ai-answer-body">
           {answer || 'No answer content received.'}
