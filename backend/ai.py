@@ -5,7 +5,7 @@ from dotenv import load_dotenv
 from groq import Groq
 
 print("========== VERIFYAI USING NEW ai.py ==========")
-print("🔥🔥🔥 NEW AI.PY LOADED 🔥🔥🔥")
+print("*** NEW AI.PY LOADED ***")
 # ============================================================
 # GROQ SETUP
 # ============================================================
@@ -62,7 +62,7 @@ Rules:
 
 def extract_claims(answer):
 
-    print("🔥🔥🔥 CLAIM EXTRACTION STARTED 🔥🔥🔥")
+    print("*** CLAIM EXTRACTION STARTED ***")
 
     prompt = f"""
 You are the Claim Extraction Agent of VerifyAI.
@@ -170,7 +170,7 @@ Example output:
 
         cleaned_claims = cleaned_claims[:6]
 
-        print("🔥🔥🔥 CLAIMS FOUND 🔥🔥🔥")
+        print("*** CLAIMS FOUND ***")
 
         for index, claim in enumerate(
             cleaned_claims,
@@ -187,7 +187,7 @@ Example output:
         )
 
         print(
-            "🔥🔥🔥 END CLAIM EXTRACTION 🔥🔥🔥"
+            "*** END CLAIM EXTRACTION ***"
         )
 
         return cleaned_claims

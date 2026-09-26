@@ -373,68 +373,6 @@ def smart_verify(request: QuestionRequest):
         if final_val is None:
             final_val = math_result.get("expected")
 
-<<<<<<< HEAD
-=======
-            ai_answer = float(numbers[-1])
-
-            # Find simple mathematical expression
-            expression_match = re.search(
-                r"\d+(?:\s*[\+\-\*\/]\s*\d+)+",
-                question
-            )
-
-            if expression_match:
-
-                expression = expression_match.group()
-
-                print("Expression:", expression)
-                print("AI answer:", ai_answer)
-
-                # Independent calculation
-                math_result = verify_math(
-                    expression,
-                    ai_answer
-                )
-        if math_result["verified"]:
-
-            return {
-        "status": "success",
-        "type": "MATH",
-        "question": question,
-        "ai_answer": ai_answer,
-        "expression": expression,
-        "verification": math_result,
-        "final_answer": math_result["calculated"],
-        "corrected": False
-    }
-
-        else:
-
-                return {
-        "status": "success",
-        "type": "MATH",
-        "question": question,
-        "ai_answer": ai_answer,
-        "expression": expression,
-        "verification": math_result,
-        "final_answer": math_result["calculated"],
-        "corrected": True
-    }
-
-                print("Math verification:")
-                print(math_result)
-
-                return {
-                    "status": "success",
-                    "type": "MATH",
-                    "question": question,
-                    "ai_answer": ai_answer,
-                    "expression": expression,
-                    "verification": math_result
-                }
-
-        # If expression could not be extracted
->>>>>>> 2262f3cf42141e9586cd0bbed5bb7a44d42272c3
         return {
             "status": "success",
             "type": "MATH",
