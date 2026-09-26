@@ -17,10 +17,31 @@ const STORAGE_KEY = 'verifyai_history_v1';
 export default function App() {
   const [activeTab, setActiveTab] = useState('home');
   const [question, setQuestion] = useState('');
+  const [pastedResponse, setPastedResponse] = useState('');
+  const [geminiApiKey, setGeminiApiKey] = useState(() => {
+    try {
+      return localStorage.getItem('verifyai_gemini_api_key') || '';
+    } catch {
+      return '';
+    }
+  });
   const [loading, setLoading] = useState(false);
   const [result, setResult] = useState(null);
   const [error, setError] = useState(null);
   const [history, setHistory] = useState([]);
+
+  // Sync geminiApiKey to localStorage
+  useEffect(() => {
+    try {
+      if (geminiApiKey) {
+        localStorage.setItem('verifyai_gemini_api_key', geminiApiKey);
+      } else {
+        localStorage.removeItem('verifyai_gemini_api_key');
+      }
+    } catch {
+      // Ignore
+    }
+  }, [geminiApiKey]);
 
   // Load history from localStorage
   useEffect(() => {
@@ -93,7 +114,9 @@ export default function App() {
 
     try {
       const currentQ = question.trim();
-      const data = await verifyQuestion(currentQ);
+      const currentR = pastedResponse.trim();
+      const currentGeminiKey = geminiApiKey.trim();
+      const data = await verifyQuestion(currentQ, currentR, currentGeminiKey);
       setResult(data);
       saveToHistory(data, currentQ);
     } catch (err) {
@@ -105,12 +128,14 @@ export default function App() {
 
   const handleClear = () => {
     setQuestion('');
+    setPastedResponse('');
     setResult(null);
     setError(null);
   };
 
   const handleSelectHistoryItem = (item) => {
     setQuestion(item.question);
+    setPastedResponse(item.rawResult?.pasted_response || '');
     setResult(item.rawResult);
     setError(null);
     setActiveTab('home');
@@ -175,6 +200,10 @@ export default function App() {
                 <QuestionInput
                   question={question}
                   setQuestion={setQuestion}
+                  pastedResponse={pastedResponse}
+                  setPastedResponse={setPastedResponse}
+                  geminiApiKey={geminiApiKey}
+                  setGeminiApiKey={setGeminiApiKey}
                   onVerify={handleVerify}
                   loading={loading}
                   onClear={handleClear}

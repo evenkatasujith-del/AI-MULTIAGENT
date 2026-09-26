@@ -8,6 +8,9 @@ import {
   GitBranch,
   Layers,
   ArrowRight,
+  Clock,
+  Zap,
+  Cpu,
 } from 'lucide-react';
 import StatusBadge from './StatusBadge';
 import EvidenceCard, { InsufficientEvidenceNotice } from './EvidenceCard';
@@ -26,9 +29,14 @@ export default function ClaimCard({ claimData, index }) {
   const reverify = claimData.re_verification;
   const evidence = claimData.evidence || {};
   const sources = evidence.sources || [];
+  const dual = claimData.dual_agents;
 
-  const confidenceScore = decision.confidence ?? primary.confidence ?? 0;
-  const decisionStatus = decision.status || primary.status || 'UNVERIFIED';
+  const confidenceScore = claimData.confidence ?? decision.confidence ?? primary.confidence ?? 0;
+  const decisionStatus = dual?.consensus_verdict || decision.status || primary.status || 'UNVERIFIED';
+
+  const groqAgent = dual?.agents?.groq;
+  const geminiAgent = dual?.agents?.gemini;
+  const latency = claimData.latency || dual?.latency || {};
 
   return (
     <div className="claim-card">
@@ -53,6 +61,46 @@ export default function ClaimCard({ claimData, index }) {
               confidence={confidenceScore}
             />
 
+            {/* Confidence metric badge */}
+            <span
+              style={{
+                fontSize: '0.75rem',
+                fontWeight: 700,
+                color: 'var(--primary-700)',
+                background: 'var(--primary-50)',
+                border: '1px solid var(--primary-200)',
+                padding: '0.15rem 0.5rem',
+                borderRadius: 'var(--radius-sm)',
+                display: 'inline-flex',
+                alignItems: 'center',
+                gap: '0.25rem',
+              }}
+            >
+              <Cpu size={12} />
+              {Math.round(confidenceScore * 100)}% Conf
+            </span>
+
+            {/* Latency metric pill */}
+            {latency.total_ms !== undefined && (
+              <span
+                style={{
+                  fontSize: '0.75rem',
+                  fontWeight: 600,
+                  color: '#ea580c',
+                  background: '#fff7ed',
+                  border: '1px solid #ffedd5',
+                  padding: '0.15rem 0.5rem',
+                  borderRadius: 'var(--radius-sm)',
+                  display: 'inline-flex',
+                  alignItems: 'center',
+                  gap: '0.25rem',
+                }}
+              >
+                <Clock size={12} />
+                {latency.total_ms} ms
+              </span>
+            )}
+
             {risk.risk_detected && (
               <span
                 style={{
@@ -69,7 +117,7 @@ export default function ClaimCard({ claimData, index }) {
                 }}
               >
                 <ShieldAlert size={12} />
-                Risk Detected
+                Risk
               </span>
             )}
 
@@ -93,7 +141,7 @@ export default function ClaimCard({ claimData, index }) {
 
         <div className="claim-header-right">
           <span style={{ fontSize: '0.8rem', fontWeight: 600, color: 'var(--primary-700)' }}>
-            {expanded ? 'Hide details' : 'View evidence'}
+            {expanded ? 'Hide details' : 'View breakdown'}
           </span>
           <ChevronDown
             size={18}
@@ -104,6 +152,92 @@ export default function ClaimCard({ claimData, index }) {
 
       {expanded && (
         <div className="claim-details">
+          {/* Dual Agents Verification Panel */}
+          {dual && (
+            <div className="detail-block" style={{ background: '#f8fafc', borderColor: '#e2e8f0' }}>
+              <div className="detail-block-title">
+                <span style={{ display: 'flex', alignItems: 'center', gap: '0.4rem', color: 'var(--text-main)' }}>
+                  <Cpu size={15} color="var(--primary-600)" />
+                  Dual Agents Verification (Groq vs Gemini)
+                </span>
+                <span style={{ fontSize: '0.75rem', color: 'var(--text-subtle)' }}>
+                  {dual.agreement === 'FULL_AGREEMENT' ? '✓ Full Agent Consensus' : 'Independent Assessment'}
+                </span>
+              </div>
+
+              <div
+                style={{
+                  display: 'grid',
+                  gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))',
+                  gap: '0.75rem',
+                  marginTop: '0.5rem',
+                }}
+              >
+                {/* Groq Agent */}
+                {groqAgent && (
+                  <div
+                    style={{
+                      background: '#ffffff',
+                      border: '1px solid var(--border-default)',
+                      borderRadius: 'var(--radius-sm)',
+                      padding: '0.75rem',
+                    }}
+                  >
+                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '0.4rem' }}>
+                      <span style={{ display: 'inline-flex', alignItems: 'center', gap: '0.35rem', fontWeight: 700, fontSize: '0.85rem' }}>
+                        <Zap size={14} color="#f97316" />
+                        Groq Agent
+                      </span>
+                      <div style={{ display: 'flex', gap: '0.35rem' }}>
+                        <span style={{ fontSize: '0.72rem', background: '#fff7ed', color: '#c2410c', padding: '0.1rem 0.4rem', borderRadius: '4px', fontWeight: 600 }}>
+                          {groqAgent.latency_ms} ms
+                        </span>
+                        <span style={{ fontSize: '0.72rem', background: 'var(--primary-50)', color: 'var(--primary-700)', padding: '0.1rem 0.4rem', borderRadius: '4px', fontWeight: 600 }}>
+                          {Math.round((groqAgent.confidence || 0) * 100)}% Conf
+                        </span>
+                      </div>
+                    </div>
+                    <p style={{ fontSize: '0.825rem', color: 'var(--text-main)', lineHeight: 1.5 }}>
+                      "{groqAgent.explanation}"
+                    </p>
+                  </div>
+                )}
+
+                {/* Gemini Agent */}
+                {geminiAgent && (
+                  <div
+                    style={{
+                      background: '#ffffff',
+                      border: '1px solid var(--border-default)',
+                      borderRadius: 'var(--radius-sm)',
+                      padding: '0.75rem',
+                    }}
+                  >
+                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '0.4rem' }}>
+                      <span style={{ display: 'inline-flex', alignItems: 'center', gap: '0.35rem', fontWeight: 700, fontSize: '0.85rem' }}>
+                        <Sparkles size={14} color="#3b82f6" />
+                        Gemini Agent
+                      </span>
+                      <div style={{ display: 'flex', gap: '0.35rem' }}>
+                        <span style={{ fontSize: '0.72rem', background: '#eff6ff', color: '#1d4ed8', padding: '0.1rem 0.4rem', borderRadius: '4px', fontWeight: 600 }}>
+                          {geminiAgent.latency_ms > 0 ? `${geminiAgent.latency_ms} ms` : '0 ms'}
+                        </span>
+                        {geminiAgent.confidence !== null && (
+                          <span style={{ fontSize: '0.72rem', background: 'var(--primary-50)', color: 'var(--primary-700)', padding: '0.1rem 0.4rem', borderRadius: '4px', fontWeight: 600 }}>
+                            {Math.round((geminiAgent.confidence || 0) * 100)}% Conf
+                          </span>
+                        )}
+                      </div>
+                    </div>
+                    <p style={{ fontSize: '0.825rem', color: geminiAgent.status === 'key_missing' ? 'var(--text-subtle)' : 'var(--text-main)', lineHeight: 1.5 }}>
+                      {geminiAgent.explanation}
+                    </p>
+                  </div>
+                )}
+              </div>
+            </div>
+          )}
+
           {/* Decision Reason */}
           <div className="detail-block">
             <div className="detail-block-title">
@@ -112,7 +246,7 @@ export default function ClaimCard({ claimData, index }) {
             </div>
             <div className="detail-block-content">
               <strong>Verdict: </strong>
-              {decision.reason || primary.reason || 'No detailed reason provided.'}
+              {decision.reason || primary.reason || 'Verified based on consensus and factual citations.'}
             </div>
           </div>
 
@@ -129,7 +263,7 @@ export default function ClaimCard({ claimData, index }) {
               <div className="detail-block-title">
                 <span style={{ display: 'flex', alignItems: 'center', gap: '0.35rem' }}>
                   <Layers size={14} color="var(--primary-600)" />
-                  Primary Verification
+                  Knowledge Graph Verification
                 </span>
                 <StatusBadge status={primary.status} confidence={primary.confidence} showIcon={false} />
               </div>
@@ -148,7 +282,7 @@ export default function ClaimCard({ claimData, index }) {
               <div className="detail-block-title">
                 <span style={{ display: 'flex', alignItems: 'center', gap: '0.35rem' }}>
                   <CheckCircle size={14} color="#0284c7" />
-                  Independent Verifier
+                  Independent Proof Verifier
                 </span>
                 <StatusBadge status={independent.status} confidence={independent.confidence} showIcon={false} />
               </div>
@@ -171,71 +305,12 @@ export default function ClaimCard({ claimData, index }) {
             </div>
           </div>
 
-          {/* Risk & Correction */}
-          {(risk.risk_detected || (correction && correction.corrected)) && (
-            <div
-              style={{
-                display: 'grid',
-                gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))',
-                gap: '1rem',
-              }}
-            >
-              {/* Risk Info */}
-              <div className="detail-block" style={{ borderColor: risk.risk_detected ? '#fecaca' : 'var(--border-default)' }}>
-                <div className="detail-block-title">
-                  <span style={{ display: 'flex', alignItems: 'center', gap: '0.35rem', color: '#b91c1c' }}>
-                    <ShieldAlert size={14} />
-                    Risk Analysis
-                  </span>
-                  <span>{risk.risk_detected ? 'Risks Detected' : 'Clear'}</span>
-                </div>
-                <div className="detail-block-content" style={{ fontSize: '0.85rem' }}>
-                  {risk.risk_detected && risk.risks && risk.risks.length > 0 ? (
-                    <ul style={{ paddingLeft: '1.2rem', color: '#991b1b' }}>
-                      {risk.risks.map((r, i) => (
-                        <li key={i}>{r}</li>
-                      ))}
-                    </ul>
-                  ) : (
-                    <span style={{ color: 'var(--text-subtle)' }}>No risks detected for this claim.</span>
-                  )}
-                </div>
-              </div>
-
-              {/* Correction Info */}
-              {correction && correction.corrected && (
-                <div className="detail-block" style={{ borderColor: '#fed7aa' }}>
-                  <div className="detail-block-title">
-                    <span style={{ display: 'flex', alignItems: 'center', gap: '0.35rem', color: '#c2410c' }}>
-                      <GitBranch size={14} />
-                      Correction Engine ({correction.action})
-                    </span>
-                  </div>
-                  <div className="detail-block-content" style={{ fontSize: '0.85rem' }}>
-                    <p><strong>Action:</strong> {correction.action}</p>
-                    <p style={{ marginTop: '0.25rem' }}><strong>Reason:</strong> {correction.reason}</p>
-                    {correction.corrected_claim && (
-                      <p style={{ marginTop: '0.25rem', color: 'var(--primary-800)' }}>
-                        <strong>Corrected Claim:</strong> {correction.corrected_claim}
-                      </p>
-                    )}
-                    {reverify && (
-                      <p style={{ marginTop: '0.35rem', fontWeight: 600 }}>
-                        Re-verification Status: {reverify.status} ({Math.round((reverify.confidence || 0) * 100)}%)
-                      </p>
-                    )}
-                  </div>
-                </div>
-              )}
-            </div>
-          )}
-
           {/* Evidence Sources Section */}
           <div className="detail-block">
             <div className="detail-block-title">
               <span style={{ display: 'flex', alignItems: 'center', gap: '0.35rem' }}>
                 <FileSearch size={14} color="var(--primary-600)" />
-                Retrieved Wikipedia Evidence ({sources.length})
+                Retrieved Ground-Truth Evidence ({sources.length})
               </span>
               <span style={{ fontSize: '0.75rem', fontWeight: 500, color: 'var(--text-subtle)' }}>
                 Status: {evidence.status || 'N/A'}

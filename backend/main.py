@@ -19,6 +19,11 @@ from decision import make_final_decision
 from math_verifier import verify_math
 from code_sandbox import run_code
 from router import detect_type
+from multi_agent_verifier import (
+    verify_claim_dual_agents,
+    verify_math_dual_agents,
+    verify_code_dual_agents,
+)
 
 
 app = FastAPI(title="VerifyAI")
@@ -43,6 +48,9 @@ app.add_middleware(
 
 class QuestionRequest(BaseModel):
     question: str
+    response: str | None = None
+    ai_response: str | None = None
+    gemini_api_key: str | None = None
 
 
 class MathRequest(BaseModel):
@@ -85,18 +93,26 @@ def test():
 def verify(request: QuestionRequest):
 
     question = request.question
+    user_response = (request.response or request.ai_response or "").strip()
+    is_user_response = bool(user_response)
 
     print("\n========================================")
     print("VERIFYAI STARTED")
     print("Question:", question)
+    print("Provided response:", "YES (" + str(len(user_response)) + " chars)" if is_user_response else "NO (Auto-generate)")
     print("========================================\n")
 
-    # Generate answer
-    answer = generate_answer(question)
-
-    print("========== GENERATED ANSWER ==========")
-    print(answer)
-    print("======================================\n")
+    # Generate answer or use provided response
+    if is_user_response:
+        answer = user_response
+        print("========== USING PROVIDED ANSWER ==========")
+        print(answer)
+        print("===========================================\n")
+    else:
+        answer = generate_answer(question)
+        print("========== GENERATED ANSWER ==========")
+        print(answer)
+        print("======================================\n")
 
     # Extract claims
     claims = extract_claims(answer)
@@ -211,6 +227,8 @@ def verify(request: QuestionRequest):
         "type": "FACT",
         "question": question,
         "answer": answer,
+        "pasted_response": user_response if is_user_response else None,
+        "is_user_response": is_user_response,
         "claims": verified_claims
     }
 
@@ -253,6 +271,23 @@ def verify_code_endpoint(request: CodeRequest):
     }
 
 
+def extract_code_snippet(raw: str) -> str:
+    import re
+    cleaned = raw.strip()
+    match = re.search(r"```(?:python)?\s*[\r\n]+(.*?)\s*```", cleaned, re.DOTALL | re.IGNORECASE)
+    if match:
+        return match.group(1).strip()
+    if cleaned.startswith("```") and cleaned.endswith("```"):
+        cleaned = cleaned[3:-3].strip()
+        if cleaned.lower().startswith("python"):
+            cleaned = cleaned[6:].strip()
+        return cleaned.strip()
+    match_single = re.search(r"^`+(?:python)?\s*[\r\n]+(.*?)\s*`+$", cleaned, re.DOTALL | re.IGNORECASE)
+    if match_single:
+        return match_single.group(1).strip()
+    return cleaned
+
+
 # ========================================
 # GENERATE + VERIFY CODE
 # ========================================
@@ -261,14 +296,21 @@ def verify_code_endpoint(request: CodeRequest):
 def generate_and_verify_code(request: QuestionRequest):
 
     question = request.question
+    user_response = (request.response or request.ai_response or "").strip()
+    is_user_response = bool(user_response)
 
     print("\n========== CODE VERIFICATION ==========")
     print("Question:", question)
+    print("Provided response:", "YES" if is_user_response else "NO (Auto-generate)")
 
-    # Generate code
-    code = generate_code(question)
+    if is_user_response:
+        code = extract_code_snippet(user_response)
+        print("\nUsing pasted code:")
+    else:
+        # Generate code
+        code = generate_code(question)
+        print("\nGenerated code:")
 
-    print("\nGenerated code:")
     print(code)
 
     # Execute code
@@ -282,6 +324,8 @@ def generate_and_verify_code(request: QuestionRequest):
         "type": "CODE",
         "question": question,
         "generated_code": code,
+        "pasted_response": user_response if is_user_response else None,
+        "is_user_response": is_user_response,
         "execution": execution
     }
 
@@ -294,6 +338,8 @@ def generate_and_verify_code(request: QuestionRequest):
 def smart_verify(request: QuestionRequest):
 
     question = request.question
+    user_response = (request.response or request.ai_response or "").strip()
+    is_user_response = bool(user_response)
 
     # Detect question type
     question_type = detect_type(question)
@@ -302,8 +348,11 @@ def smart_verify(request: QuestionRequest):
     print("SMART VERIFY")
     print("Question:", question)
     print("Detected type:", question_type)
+    print("Provided AI response:", "YES (" + str(len(user_response)) + " chars)" if is_user_response else "NO (Auto-generate)")
     print("========================================\n")
 
+
+    gemini_key = request.gemini_api_key
 
     # ====================================
     # CODE
@@ -313,17 +362,25 @@ def smart_verify(request: QuestionRequest):
 
         print("========== CODE PATH ==========")
 
-        # Generate code
-        code = generate_code(question)
+        if is_user_response:
+            code = extract_code_snippet(user_response)
+            print("Using pasted code:")
+        else:
+            # Generate code
+            code = generate_code(question)
+            print("Generated code:")
 
-        print("Generated code:")
         print(code)
 
-        # Run generated code
+        # Run code in sandbox
         execution = run_code(code)
 
         print("Execution:")
         print(execution)
+
+        # Dual Agent Code Verification (Groq + Gemini)
+        multi_agent_res = verify_code_dual_agents(question, code, gemini_key)
+        print("Multi-Agent Code Review:", multi_agent_res.get("consensus_confidence"), multi_agent_res.get("latency"))
 
         # If code failed, try correction
         correction = None
@@ -335,7 +392,7 @@ def smart_verify(request: QuestionRequest):
 
             correction = {
                 "status": "FAILED",
-                "message": "Generated code failed during sandbox execution."
+                "message": "Pasted code failed during sandbox execution." if is_user_response else "Generated code failed during sandbox execution."
             }
 
         return {
@@ -343,9 +400,14 @@ def smart_verify(request: QuestionRequest):
             "type": "CODE",
             "question": question,
             "generated_code": code,
+            "pasted_response": user_response if is_user_response else None,
+            "is_user_response": is_user_response,
             "execution": execution,
             "correction": correction,
-            "corrected_execution": corrected_execution
+            "corrected_execution": corrected_execution,
+            "multi_agent": multi_agent_res,
+            "confidence": multi_agent_res.get("consensus_confidence", 0.95),
+            "latency": multi_agent_res.get("latency", {})
         }
 
 
@@ -357,10 +419,14 @@ def smart_verify(request: QuestionRequest):
 
         print("========== MATH PATH ==========")
 
-        # Generate AI answer
-        answer = generate_answer(question)
+        if is_user_response:
+            answer = user_response
+            print("Using pasted math answer:")
+        else:
+            # Generate AI answer
+            answer = generate_answer(question)
+            print("AI math answer:")
 
-        print("AI math answer:")
         print(answer)
 
         from math_verifier import verify_math_solution
@@ -368,6 +434,10 @@ def smart_verify(request: QuestionRequest):
 
         print("Math verification:")
         print(math_result)
+
+        # Dual Agent Math Verification (Groq + Gemini)
+        multi_agent_res = verify_math_dual_agents(question, answer, gemini_key)
+        print("Multi-Agent Math Review:", multi_agent_res.get("consensus_confidence"), multi_agent_res.get("latency"))
 
         final_val = math_result.get("final_answer") or math_result.get("calculated")
         if final_val is None:
@@ -378,9 +448,14 @@ def smart_verify(request: QuestionRequest):
             "type": "MATH",
             "question": question,
             "answer": answer,
+            "pasted_response": user_response if is_user_response else None,
+            "is_user_response": is_user_response,
             "ai_answer": final_val if final_val is not None else answer,
             "expression": math_result.get("expression", ""),
-            "verification": math_result
+            "verification": math_result,
+            "multi_agent": multi_agent_res,
+            "confidence": multi_agent_res.get("consensus_confidence", 0.95),
+            "latency": multi_agent_res.get("latency", {})
         }
 
 
@@ -392,10 +467,14 @@ def smart_verify(request: QuestionRequest):
 
         print("========== FACT PATH ==========")
 
-        # Generate answer
-        answer = generate_answer(question)
+        if is_user_response:
+            answer = user_response
+            print("Using pasted answer:")
+        else:
+            # Generate answer
+            answer = generate_answer(question)
+            print("Generated answer:")
 
-        print("Generated answer:")
         print(answer)
 
         # Extract claims
@@ -414,26 +493,17 @@ def smart_verify(request: QuestionRequest):
             # Evidence
             evidence = get_evidence(claim)
 
-            print("Evidence:")
-            print(evidence)
-
             # Primary verification
             verification = verify_claim(
                 claim,
                 evidence
             )
 
-            print("Primary verification:")
-            print(verification)
-
             # Independent verification
             independent_verification = independent_verify(
                 claim,
                 evidence
             )
-
-            print("Independent verification:")
-            print(independent_verification)
 
             # Risk detection
             risk = detect_risk(
@@ -442,17 +512,11 @@ def smart_verify(request: QuestionRequest):
                 evidence
             )
 
-            print("Risk:")
-            print(risk)
-
             # Correction
             correction = correct_claim(
                 claim,
                 risk
             )
-
-            print("Correction:")
-            print(correction)
 
             # Re-verification
             re_verification = None
@@ -467,9 +531,6 @@ def smart_verify(request: QuestionRequest):
                     correction["corrected_claim"]
                 )
 
-                print("Re-verification:")
-                print(re_verification)
-
             # Final decision
             final_decision = make_final_decision(
                 verification,
@@ -479,8 +540,9 @@ def smart_verify(request: QuestionRequest):
                 independent_verification
             )
 
-            print("Final decision:")
-            print(final_decision)
+            # Dual AI Agents Verification (Groq + Gemini)
+            dual_agents = verify_claim_dual_agents(question, claim, gemini_key)
+            print(f"Dual Agents (Claim {index}): Consensus={dual_agents.get('consensus_verdict')}, Conf={dual_agents.get('consensus_confidence')}, Latency={dual_agents.get('latency')}")
 
             verified_claims.append({
                 "claim": claim,
@@ -490,13 +552,35 @@ def smart_verify(request: QuestionRequest):
                 "risk": risk,
                 "correction": correction,
                 "re_verification": re_verification,
-                "final_decision": final_decision
+                "final_decision": final_decision,
+                "dual_agents": dual_agents,
+                "confidence": dual_agents.get("consensus_confidence", 0.9),
+                "latency": dual_agents.get("latency", {})
             })
+
+        total_groq_ms = round(sum(c.get("dual_agents", {}).get("latency", {}).get("groq_ms", 0.0) for c in verified_claims), 1)
+        total_gemini_ms = round(sum(c.get("dual_agents", {}).get("latency", {}).get("gemini_ms", 0.0) for c in verified_claims), 1)
+        total_wall_ms = round(sum(c.get("dual_agents", {}).get("latency", {}).get("total_ms", 0.0) for c in verified_claims), 1)
+        avg_confidence = round(sum(c.get("confidence", 0.9) for c in verified_claims) / len(verified_claims), 2) if verified_claims else 0.9
 
         return {
             "status": "success",
             "type": "FACT",
             "question": question,
             "answer": answer,
-            "claims": verified_claims
-        }
+            "pasted_response": user_response if is_user_response else None,
+            "is_user_response": is_user_response,
+            "claims": verified_claims,
+            "confidence": avg_confidence,
+            "latency": {
+                "groq_ms": total_groq_ms,
+                "gemini_ms": total_gemini_ms,
+                "total_ms": total_wall_ms
+            },
+            "multi_agent": {
+                "groq_total_ms": total_groq_ms,
+                "gemini_total_ms": total_gemini_ms,
+                "total_ms": total_wall_ms,
+                "gemini_status": verified_claims[0]["dual_agents"]["agents"]["gemini"]["status"] if verified_claims else "unknown"
+            }
+        }

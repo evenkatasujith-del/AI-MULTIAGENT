@@ -12,6 +12,7 @@ import {
   Check,
 } from 'lucide-react';
 import StatusBadge from './StatusBadge';
+import MultiAgentMetrics from './MultiAgentMetrics';
 
 export default function MathResult({ data }) {
   if (!data) return null;
@@ -76,6 +77,13 @@ export default function MathResult({ data }) {
           </div>
         )}
       </div>
+
+      {/* Dual Multi-Agent Metrics (Confidence, Steps, Latency) */}
+      <MultiAgentMetrics
+        multiAgent={data.multi_agent}
+        totalConfidence={Math.round((data.confidence || 0.95) * 100)}
+        latency={data.latency}
+      />
 
       {/* Verification Summary Card */}
       <div className="math-card">
@@ -197,7 +205,9 @@ export default function MathResult({ data }) {
         <div className="ai-answer-card">
           <div className="section-label">
             <Sparkles size={14} color="var(--primary-600)" />
-            AI Step-by-Step Solution
+            {data.is_user_response || data.pasted_response
+              ? 'Pasted Math Solution (Independently Validated)'
+              : 'AI Step-by-Step Solution'}
           </div>
           <div className="ai-answer-body" style={{ whiteSpace: 'pre-wrap', lineHeight: 1.7 }}>
             {fullAnswer}

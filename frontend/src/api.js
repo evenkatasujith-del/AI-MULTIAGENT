@@ -33,12 +33,24 @@ export async function checkBackendHealth() {
  * Submits a question to the /smart-verify unified endpoint.
  * Backend automatically detects whether it is FACT, MATH, or CODE.
  */
-export async function verifyQuestion(question) {
+export async function verifyQuestion(question, responseText = '', geminiApiKey = '') {
   if (!question || !question.trim()) {
     throw new Error('Please enter a question or problem to verify.');
   }
 
   const url = `${API_BASE_URL}/smart-verify`;
+
+  const payload = {
+    question: question.trim(),
+  };
+
+  if (responseText && responseText.trim()) {
+    payload.response = responseText.trim();
+  }
+
+  if (geminiApiKey && geminiApiKey.trim()) {
+    payload.gemini_api_key = geminiApiKey.trim();
+  }
 
   try {
     const response = await fetch(url, {
@@ -46,7 +58,7 @@ export async function verifyQuestion(question) {
       headers: {
         'Content-Type': 'application/json',
       },
-      body: JSON.stringify({ question: question.trim() }),
+      body: JSON.stringify(payload),
     });
 
     if (!response.ok) {

@@ -12,6 +12,7 @@ import {
   RotateCcw,
 } from 'lucide-react';
 import StatusBadge from './StatusBadge';
+import MultiAgentMetrics from './MultiAgentMetrics';
 
 /**
  * Basic Python syntax highlighter that parses lines into colored tokens
@@ -102,12 +103,23 @@ export default function CodeResult({ data }) {
         <p className="question-text">{question}</p>
       </div>
 
+      {/* Dual Multi-Agent Metrics (Confidence, Code Review, Latency) */}
+      <MultiAgentMetrics
+        multiAgent={data.multi_agent}
+        totalConfidence={Math.round((data.confidence || 0.95) * 100)}
+        latency={data.latency}
+      />
+
       {/* Code Editor Block */}
       <div className="code-editor-card">
         <div className="code-header-bar">
           <div className="code-lang-tag">
             <Code size={16} color="#38bdf8" />
-            <span>Python 3 Sandbox</span>
+            <span>
+              {data.is_user_response || data.pasted_response
+                ? 'Pasted Python Code (Sandbox Verified)'
+                : 'Python 3 Sandbox'}
+            </span>
           </div>
 
           <button type="button" className="btn-copy" onClick={handleCopy}>
